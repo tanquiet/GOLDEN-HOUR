@@ -17,15 +17,46 @@ interface MonthData {
   [monthKey: string]: HabitData; // monthKey format: "YYYY-MM"
 }
 
-// Get current month key in YYYY-MM format
-const getCurrentMonthKey = (): string => {
+// Get current period key based on 30-day cycles from start of year
+const getCurrentPeriodKey = (): string => {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
+  const periodNumber = Math.floor(dayOfYear / 30) + 1;
+  return `${now.getFullYear()}-P${periodNumber}`;
+};
+
+// Get period info (start date, end date, current day within period)
+const getPeriodInfo = (periodKey: string) => {
+  const [year, periodPart] = periodKey.split("-");
+  const periodNumber = parseInt(periodPart.replace("P", ""));
+  const startDayOfYear = (periodNumber - 1) * 30;
+  
+  const startDate = new Date(parseInt(year), 0, 1 + startDayOfYear);
+  const endDate = new Date(parseInt(year), 0, startDayOfYear + 30);
+  
+  // Calculate current day within this period
+  const now = new Date();
+  const currentPeriodKey = getCurrentPeriodKey();
+  
+  let currentDayInPeriod = DAYS_IN_PERIOD;
+  if (periodKey === currentPeriodKey) {
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
+    currentDayInPeriod = (dayOfYear % 30) + 1;
+  }
+  
+  return {
+    startDate,
+    endDate,
+    currentDayInPeriod,
+    periodNumber,
+    year: parseInt(year)
+  };
 };
 
 // Fixed 30-day tracking period
 const DAYS_IN_PERIOD = 30;
-
 // Calculate streak for a habit (works with 30-day period)
 const calculateStreak = (completedDays: number[], currentDay: number): number => {
   let streak = 0;
@@ -64,7 +95,7 @@ const saveData = (data: MonthData): void => {
 };
 
 const HabitTracker = () => {
-  const [monthKey, setMonthKey] = useState(getCurrentMonthKey());
+  const [periodKey, setPeriodKey] = useState(getCurrentPeriodKey());
   const [data, setData] = useState<MonthData>(loadData);
   const [newHabitName, setNewHabitName] = useState("");
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
@@ -72,11 +103,11 @@ const HabitTracker = () => {
   const [isAddingHabit, setIsAddingHabit] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  const habits = data[monthKey] || {};
+  const periodInfo = getPeriodInfo(periodKey);
+  const habits = data[periodKey] || {};
   const habitIds = Object.keys(habits);
-  const today = new Date().getDate();
-  const currentDay = Math.min(today, DAYS_IN_PERIOD); // Cap at 30 for current period
-  const isCurrentMonth = monthKey === getCurrentMonthKey();
+  const currentDay = periodInfo.currentDayInPeriod;
+  const isCurrentPeriod = periodKey === getCurrentPeriodKey();
 
   // Persist data to localStorage whenever it changes
   useEffect(() => {
@@ -90,8 +121,8 @@ const HabitTracker = () => {
     const habitId = generateId();
     setData((prev) => ({
       ...prev,
-      [monthKey]: {
-        ...prev[monthKey],
+      [periodKey]: {
+        ...prev[periodKey],
         [habitId]: {
           name: newHabitName.trim(),
           completedDays: [],
@@ -106,16 +137,16 @@ const HabitTracker = () => {
   // Delete a habit
   const deleteHabit = (habitId: string) => {
     setData((prev) => {
-      const newMonthData = { ...prev[monthKey] };
-      delete newMonthData[habitId];
-      return { ...prev, [monthKey]: newMonthData };
+      const newPeriodData = { ...prev[periodKey] };
+      delete newPeriodData[habitId];
+      return { ...prev, [periodKey]: newPeriodData };
     });
   };
 
   // Toggle habit completion for a day
   const toggleDay = (habitId: string, day: number) => {
     setData((prev) => {
-      const habit = prev[monthKey]?.[habitId];
+      const habit = prev[periodKey]?.[habitId];
       if (!habit) return prev;
 
       const completedDays = habit.completedDays.includes(day)
@@ -124,8 +155,8 @@ const HabitTracker = () => {
 
       return {
         ...prev,
-        [monthKey]: {
-          ...prev[monthKey],
+        [periodKey]: {
+          ...prev[periodKey],
           [habitId]: { ...habit, completedDays },
         },
       };
@@ -144,10 +175,10 @@ const HabitTracker = () => {
 
     setData((prev) => ({
       ...prev,
-      [monthKey]: {
-        ...prev[monthKey],
+      [periodKey]: {
+        ...prev[periodKey],
         [editingHabit]: {
-          ...prev[monthKey][editingHabit],
+          ...prev[periodKey][editingHabit],
           name: editName.trim(),
         },
       },
@@ -156,38 +187,47 @@ const HabitTracker = () => {
     setEditName("");
   };
 
-  // Navigate months
-  const navigateMonth = (direction: number) => {
-    const [year, month] = monthKey.split("-").map(Number);
-    const newDate = new Date(year, month - 1 + direction, 1);
-    setMonthKey(
-      `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, "0")}`
-    );
+  // Navigate periods
+  const navigatePeriod = (direction: number) => {
+    const [year, periodPart] = periodKey.split("-");
+    const currentPeriod = parseInt(periodPart.replace("P", ""));
+    let newPeriod = currentPeriod + direction;
+    let newYear = parseInt(year);
+    
+    // Handle year boundaries (12 periods per year approximately)
+    if (newPeriod < 1) {
+      newYear -= 1;
+      newPeriod = 12;
+    } else if (newPeriod > 12) {
+      newYear += 1;
+      newPeriod = 1;
+    }
+    
+    setPeriodKey(`${newYear}-P${newPeriod}`);
   };
 
-  // Format month for display
-  const formatMonthDisplay = (key: string): string => {
-    const [year, month] = key.split("-").map(Number);
-    return new Date(year, month - 1).toLocaleDateString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
+  // Format period for display
+  const formatPeriodDisplay = (key: string): string => {
+    const info = getPeriodInfo(key);
+    const startStr = info.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const endStr = info.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${startStr} - ${endStr}, ${info.year}`;
   };
 
   // Calculate completion percentage
   const getCompletionPercentage = (habitId: string): number => {
     const habit = habits[habitId];
     if (!habit) return 0;
-    const relevantDays = isCurrentMonth ? currentDay : DAYS_IN_PERIOD;
+    const relevantDays = isCurrentPeriod ? currentDay : DAYS_IN_PERIOD;
     return Math.round((habit.completedDays.length / relevantDays) * 100);
   };
 
-  // Get total monthly stats
-  const getMonthlyStats = () => {
+  // Get total period stats
+  const getPeriodStats = () => {
     const totalHabits = habitIds.length;
     if (totalHabits === 0) return { avgCompletion: 0, totalChecks: 0, bestStreak: 0 };
 
-    const relevantDays = isCurrentMonth ? currentDay : DAYS_IN_PERIOD;
+    const relevantDays = isCurrentPeriod ? currentDay : DAYS_IN_PERIOD;
     let totalChecks = 0;
     let bestStreak = 0;
 
@@ -205,7 +245,7 @@ const HabitTracker = () => {
     return { avgCompletion, totalChecks, bestStreak };
   };
 
-  const stats = getMonthlyStats();
+  const stats = getPeriodStats();
 
   // Get day label for header (just shows "Day X")
   const getDayLabel = (day: number): string => {
@@ -228,23 +268,23 @@ const HabitTracker = () => {
               </div>
             </div>
             
-            {/* Month Navigation */}
+            {/* Period Navigation */}
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigateMonth(-1)}
+                onClick={() => navigatePeriod(-1)}
                 className="text-muted-foreground hover:text-foreground"
               >
                 ←
               </Button>
-              <span className="text-sm font-medium min-w-[140px] text-center">
-                {formatMonthDisplay(monthKey)}
+              <span className="text-sm font-medium min-w-[180px] text-center">
+                {formatPeriodDisplay(periodKey)}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigateMonth(1)}
+                onClick={() => navigatePeriod(1)}
                 className="text-muted-foreground hover:text-foreground"
               >
                 →
@@ -346,7 +386,7 @@ const HabitTracker = () => {
                         key={day}
                         className={cn(
                           "px-2 py-3 text-center text-xs font-medium min-w-[40px]",
-                          isCurrentMonth && day === currentDay
+                          isCurrentPeriod && day === currentDay
                             ? "text-primary"
                             : "text-muted-foreground"
                         )}
@@ -432,8 +472,8 @@ const HabitTracker = () => {
                         {/* Day Checkboxes */}
                         {Array.from({ length: DAYS_IN_PERIOD }, (_, i) => i + 1).map((day) => {
                           const isCompleted = habit.completedDays.includes(day);
-                          const isPast = isCurrentMonth && day < currentDay;
-                          const isFuture = isCurrentMonth && day > currentDay;
+                          const isPast = isCurrentPeriod && day < currentDay;
+                          const isFuture = isCurrentPeriod && day > currentDay;
 
                           return (
                             <td key={day} className="px-2 py-2 text-center">
@@ -449,7 +489,7 @@ const HabitTracker = () => {
                                     : isFuture
                                     ? "border-border/30 bg-muted/20 cursor-not-allowed"
                                     : "border-border hover:border-primary/50 hover:bg-primary/5",
-                                  isCurrentMonth && day === today && !isCompleted && "border-primary/50 ring-2 ring-primary/20"
+                                  isCurrentPeriod && day === currentDay && !isCompleted && "border-primary/50 ring-2 ring-primary/20"
                                 )}
                               >
                                 {isCompleted && <Check className="w-4 h-4" />}
@@ -554,7 +594,7 @@ const HabitTracker = () => {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      {habit.completedDays.length} of {isCurrentMonth ? currentDay : DAYS_IN_PERIOD} days completed
+                      {habit.completedDays.length} of {isCurrentPeriod ? currentDay : DAYS_IN_PERIOD} days completed
                     </p>
                   </div>
                 );
