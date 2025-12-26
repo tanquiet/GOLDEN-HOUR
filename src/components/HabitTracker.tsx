@@ -23,24 +23,14 @@ const getCurrentMonthKey = (): string => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
 
-// Get number of days in a month
-const getDaysInMonth = (monthKey: string): number => {
-  const [year, month] = monthKey.split("-").map(Number);
-  return new Date(year, month, 0).getDate();
-};
+// Fixed 30-day tracking period
+const DAYS_IN_PERIOD = 30;
 
-// Get day of week for first day of month (0 = Sunday)
-const getFirstDayOfMonth = (monthKey: string): number => {
-  const [year, month] = monthKey.split("-").map(Number);
-  return new Date(year, month - 1, 1).getDay();
-};
-
-// Calculate streak for a habit
-const calculateStreak = (completedDays: number[], totalDays: number): number => {
-  const today = new Date().getDate();
+// Calculate streak for a habit (works with 30-day period)
+const calculateStreak = (completedDays: number[], currentDay: number): number => {
   let streak = 0;
   
-  for (let day = today; day >= 1; day--) {
+  for (let day = currentDay; day >= 1; day--) {
     if (completedDays.includes(day)) {
       streak++;
     } else {
@@ -82,10 +72,10 @@ const HabitTracker = () => {
   const [isAddingHabit, setIsAddingHabit] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  const daysInMonth = getDaysInMonth(monthKey);
   const habits = data[monthKey] || {};
   const habitIds = Object.keys(habits);
   const today = new Date().getDate();
+  const currentDay = Math.min(today, DAYS_IN_PERIOD); // Cap at 30 for current period
   const isCurrentMonth = monthKey === getCurrentMonthKey();
 
   // Persist data to localStorage whenever it changes
@@ -188,7 +178,7 @@ const HabitTracker = () => {
   const getCompletionPercentage = (habitId: string): number => {
     const habit = habits[habitId];
     if (!habit) return 0;
-    const relevantDays = isCurrentMonth ? today : daysInMonth;
+    const relevantDays = isCurrentMonth ? currentDay : DAYS_IN_PERIOD;
     return Math.round((habit.completedDays.length / relevantDays) * 100);
   };
 
@@ -197,14 +187,14 @@ const HabitTracker = () => {
     const totalHabits = habitIds.length;
     if (totalHabits === 0) return { avgCompletion: 0, totalChecks: 0, bestStreak: 0 };
 
-    const relevantDays = isCurrentMonth ? today : daysInMonth;
+    const relevantDays = isCurrentMonth ? currentDay : DAYS_IN_PERIOD;
     let totalChecks = 0;
     let bestStreak = 0;
 
     habitIds.forEach((id) => {
       const habit = habits[id];
       totalChecks += habit.completedDays.length;
-      const streak = calculateStreak(habit.completedDays, daysInMonth);
+      const streak = calculateStreak(habit.completedDays, currentDay);
       if (streak > bestStreak) bestStreak = streak;
     });
 
@@ -217,12 +207,9 @@ const HabitTracker = () => {
 
   const stats = getMonthlyStats();
 
-  // Get day names for header
-  const getDayName = (day: number): string => {
-    const [year, month] = monthKey.split("-").map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString("en-US", {
-      weekday: "short",
-    });
+  // Get day label for header (just shows "Day X")
+  const getDayLabel = (day: number): string => {
+    return `Day`;
   };
 
   return (
@@ -354,18 +341,17 @@ const HabitTracker = () => {
                     <th className="sticky left-0 z-10 bg-muted/50 backdrop-blur-sm px-4 py-3 text-left text-sm font-medium text-muted-foreground min-w-[200px]">
                       Habit
                     </th>
-                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
+                    {Array.from({ length: DAYS_IN_PERIOD }, (_, i) => i + 1).map((day) => (
                       <th
                         key={day}
                         className={cn(
                           "px-2 py-3 text-center text-xs font-medium min-w-[40px]",
-                          isCurrentMonth && day === today
+                          isCurrentMonth && day === currentDay
                             ? "text-primary"
                             : "text-muted-foreground"
                         )}
                       >
                         <div>{day}</div>
-                        <div className="text-[10px] opacity-60">{getDayName(day)}</div>
                       </th>
                     ))}
                     <th className="sticky right-0 z-10 bg-muted/50 backdrop-blur-sm px-4 py-3 text-center text-sm font-medium text-muted-foreground min-w-[100px]">
@@ -377,7 +363,7 @@ const HabitTracker = () => {
                   {habitIds.map((habitId, index) => {
                     const habit = habits[habitId];
                     const percentage = getCompletionPercentage(habitId);
-                    const streak = calculateStreak(habit.completedDays, daysInMonth);
+                    const streak = calculateStreak(habit.completedDays, currentDay);
 
                     return (
                       <tr
@@ -444,10 +430,10 @@ const HabitTracker = () => {
                         </td>
 
                         {/* Day Checkboxes */}
-                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+                        {Array.from({ length: DAYS_IN_PERIOD }, (_, i) => i + 1).map((day) => {
                           const isCompleted = habit.completedDays.includes(day);
-                          const isPast = isCurrentMonth && day < today;
-                          const isFuture = isCurrentMonth && day > today;
+                          const isPast = isCurrentMonth && day < currentDay;
+                          const isFuture = isCurrentMonth && day > currentDay;
 
                           return (
                             <td key={day} className="px-2 py-2 text-center">
@@ -530,7 +516,7 @@ const HabitTracker = () => {
               {habitIds.map((habitId) => {
                 const habit = habits[habitId];
                 const percentage = getCompletionPercentage(habitId);
-                const streak = calculateStreak(habit.completedDays, daysInMonth);
+                const streak = calculateStreak(habit.completedDays, currentDay);
 
                 return (
                   <div
@@ -568,7 +554,7 @@ const HabitTracker = () => {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      {habit.completedDays.length} of {isCurrentMonth ? today : daysInMonth} days completed
+                      {habit.completedDays.length} of {isCurrentMonth ? currentDay : DAYS_IN_PERIOD} days completed
                     </p>
                   </div>
                 );
