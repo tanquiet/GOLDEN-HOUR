@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Edit2, Check, X, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-
+import { useAuth } from "@/hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 // Types for habit data structure
 interface HabitEntry {
   name: string;
@@ -127,6 +128,8 @@ const SetupScreen = ({ onComplete }: { onComplete: (date: string) => void }) => 
 
 // Main Tracker Component
 const HabitTracker = () => {
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState<TrackerData | null>(loadData);
   const [viewOffset, setViewOffset] = useState(0); // Offset from latest 30-day window
   const [newHabitName, setNewHabitName] = useState("");
@@ -134,6 +137,11 @@ const HabitTracker = () => {
   const [editName, setEditName] = useState("");
   const [isAddingHabit, setIsAddingHabit] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
 
   // Persist data whenever it changes
   useEffect(() => {
@@ -343,7 +351,7 @@ const HabitTracker = () => {
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <span className="text-sm font-medium min-w-[180px] text-center">
+              <span className="text-sm font-medium min-w-[180px] text-center hidden sm:block">
                 {formatDateRange()}
               </span>
               <Button
@@ -355,6 +363,17 @@ const HabitTracker = () => {
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
+              
+              <div className="ml-2 pl-2 border-l border-border">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>
