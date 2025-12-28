@@ -1,74 +1,60 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Edit2, Check, X, Flame, TrendingUp, Calendar } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 // Types for habit data structure
-interface HabitData {
-  [habitId: string]: {
-    name: string;
-    completedDays: number[]; // Array of day numbers (1-31)
-    createdAt: string;
-  };
+interface HabitEntry {
+  name: string;
+  completedDates: string[]; // Array of date strings "YYYY-MM-DD"
+  createdAt: string;
 }
 
-interface MonthData {
-  [monthKey: string]: HabitData; // monthKey format: "YYYY-MM"
+interface TrackerData {
+  startDate: string; // "YYYY-MM-DD"
+  habits: { [habitId: string]: HabitEntry };
 }
 
-// Get current period key based on 30-day cycles from start of year
-const getCurrentPeriodKey = (): string => {
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
-  const periodNumber = Math.floor(dayOfYear / 30) + 1;
-  return `${now.getFullYear()}-P${periodNumber}`;
+// Fixed display window of 30 days
+const DAYS_TO_SHOW = 30;
+
+// Storage key
+const STORAGE_KEY = "habit_tracker_v2";
+
+// Date utilities
+const formatDate = (date: Date): string => {
+  return date.toISOString().split("T")[0];
 };
 
-// Get period info (start date, end date, current day within period)
-const getPeriodInfo = (periodKey: string) => {
-  const [year, periodPart] = periodKey.split("-");
-  const periodNumber = parseInt(periodPart.replace("P", ""));
-  const startDayOfYear = (periodNumber - 1) * 30;
-  
-  const startDate = new Date(parseInt(year), 0, 1 + startDayOfYear);
-  const endDate = new Date(parseInt(year), 0, startDayOfYear + 30);
-  
-  // Calculate current day within this period
-  const now = new Date();
-  const currentPeriodKey = getCurrentPeriodKey();
-  
-  let currentDayInPeriod = DAYS_IN_PERIOD;
-  if (periodKey === currentPeriodKey) {
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-    const dayOfYear = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
-    currentDayInPeriod = (dayOfYear % 30) + 1;
-  }
-  
-  return {
-    startDate,
-    endDate,
-    currentDayInPeriod,
-    periodNumber,
-    year: parseInt(year)
-  };
+const parseDate = (dateStr: string): Date => {
+  return new Date(dateStr + "T00:00:00");
 };
 
-// Fixed 30-day tracking period
-const DAYS_IN_PERIOD = 30;
-// Calculate streak for a habit (works with 30-day period)
-const calculateStreak = (completedDays: number[], currentDay: number): number => {
-  let streak = 0;
-  
-  for (let day = currentDay; day >= 1; day--) {
-    if (completedDays.includes(day)) {
-      streak++;
-    } else {
-      break;
-    }
+const addDays = (date: Date, days: number): Date => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
+const getDaysBetween = (start: Date, end: Date): number => {
+  const diffTime = end.getTime() - start.getTime();
+  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+};
+
+// Load data from localStorage
+const loadData = (): TrackerData | null => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
   }
-  return streak;
+};
+
+// Save data to localStorage
+const saveData = (data: TrackerData): void => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
 
 // Generate unique ID
@@ -76,181 +62,257 @@ const generateId = (): string => {
   return `habit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
-// Storage key for localStorage
-const STORAGE_KEY = "habit_tracker_data";
-
-// Load data from localStorage
-const loadData = (): MonthData => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
+// Calculate streak from a specific date going backwards
+const calculateStreak = (completedDates: string[], fromDate: Date): number => {
+  let streak = 0;
+  let checkDate = new Date(fromDate);
+  
+  while (true) {
+    const dateStr = formatDate(checkDate);
+    if (completedDates.includes(dateStr)) {
+      streak++;
+      checkDate = addDays(checkDate, -1);
+    } else {
+      break;
+    }
   }
+  return streak;
 };
 
-// Save data to localStorage
-const saveData = (data: MonthData): void => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+// Setup Screen Component
+const SetupScreen = ({ onComplete }: { onComplete: (date: string) => void }) => {
+  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl p-8 shadow-card border border-border max-w-md w-full animate-scale-in">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Calendar className="w-8 h-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to Habit Tracker</h1>
+          <p className="text-muted-foreground">
+            Choose your start date to begin tracking your daily habits
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Start Date
+            </label>
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full text-center text-lg"
+              max={formatDate(new Date())}
+            />
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              You can start from today or any past date
+            </p>
+          </div>
+
+          <Button
+            onClick={() => onComplete(selectedDate)}
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 text-lg"
+          >
+            Start Tracking
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
+// Main Tracker Component
 const HabitTracker = () => {
-  const [periodKey, setPeriodKey] = useState(getCurrentPeriodKey());
-  const [data, setData] = useState<MonthData>(loadData);
+  const [data, setData] = useState<TrackerData | null>(loadData);
+  const [viewOffset, setViewOffset] = useState(0); // Offset from latest 30-day window
   const [newHabitName, setNewHabitName] = useState("");
   const [editingHabit, setEditingHabit] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [isAddingHabit, setIsAddingHabit] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  const periodInfo = getPeriodInfo(periodKey);
-  const habits = data[periodKey] || {};
-  const habitIds = Object.keys(habits);
-  const currentDay = periodInfo.currentDayInPeriod;
-  const isCurrentPeriod = periodKey === getCurrentPeriodKey();
-
-  // Persist data to localStorage whenever it changes
+  // Persist data whenever it changes
   useEffect(() => {
-    saveData(data);
+    if (data) {
+      saveData(data);
+    }
   }, [data]);
+
+  // Handle setup completion
+  const handleSetupComplete = (startDate: string) => {
+    const newData: TrackerData = {
+      startDate,
+      habits: {},
+    };
+    setData(newData);
+    saveData(newData);
+  };
+
+  // Show setup screen if no data
+  if (!data) {
+    return <SetupScreen onComplete={handleSetupComplete} />;
+  }
+
+  const today = new Date();
+  const startDate = parseDate(data.startDate);
+  const totalDaysSinceStart = getDaysBetween(startDate, today) + 1;
+  
+  // Calculate the current view window
+  const windowEndOffset = viewOffset * DAYS_TO_SHOW;
+  const windowStartOffset = windowEndOffset + DAYS_TO_SHOW - 1;
+  
+  // Get dates for current view window
+  const getDatesInView = (): Date[] => {
+    const dates: Date[] = [];
+    for (let i = 0; i < DAYS_TO_SHOW; i++) {
+      const daysFromToday = windowEndOffset + (DAYS_TO_SHOW - 1 - i);
+      const date = addDays(today, -daysFromToday);
+      // Only include dates from start date onwards
+      if (date >= startDate) {
+        dates.push(date);
+      }
+    }
+    return dates;
+  };
+
+  const datesInView = getDatesInView();
+  const habits = data.habits;
+  const habitIds = Object.keys(habits);
+
+  // Check if we can navigate
+  const canGoBack = windowStartOffset < totalDaysSinceStart - 1;
+  const canGoForward = viewOffset > 0;
+
+  // Navigate view window
+  const navigateWindow = (direction: number) => {
+    if (direction > 0 && canGoBack) {
+      setViewOffset(viewOffset + 1);
+    } else if (direction < 0 && canGoForward) {
+      setViewOffset(viewOffset - 1);
+    }
+  };
+
+  // Format date range for display
+  const formatDateRange = (): string => {
+    if (datesInView.length === 0) return "";
+    const first = datesInView[0];
+    const last = datesInView[datesInView.length - 1];
+    const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+    return `${first.toLocaleDateString("en-US", formatOpts)} - ${last.toLocaleDateString("en-US", formatOpts)}, ${last.getFullYear()}`;
+  };
 
   // Add a new habit
   const addHabit = () => {
-    if (!newHabitName.trim()) return;
+    if (!newHabitName.trim() || !data) return;
 
     const habitId = generateId();
-    setData((prev) => ({
-      ...prev,
-      [periodKey]: {
-        ...prev[periodKey],
+    setData({
+      ...data,
+      habits: {
+        ...data.habits,
         [habitId]: {
           name: newHabitName.trim(),
-          completedDays: [],
+          completedDates: [],
           createdAt: new Date().toISOString(),
         },
       },
-    }));
+    });
     setNewHabitName("");
     setIsAddingHabit(false);
   };
 
   // Delete a habit
   const deleteHabit = (habitId: string) => {
-    setData((prev) => {
-      const newPeriodData = { ...prev[periodKey] };
-      delete newPeriodData[habitId];
-      return { ...prev, [periodKey]: newPeriodData };
+    if (!data) return;
+    const newHabits = { ...data.habits };
+    delete newHabits[habitId];
+    setData({ ...data, habits: newHabits });
+  };
+
+  // Toggle habit completion for a date
+  const toggleDate = (habitId: string, dateStr: string) => {
+    if (!data) return;
+    const habit = data.habits[habitId];
+    if (!habit) return;
+
+    const completedDates = habit.completedDates.includes(dateStr)
+      ? habit.completedDates.filter((d) => d !== dateStr)
+      : [...habit.completedDates, dateStr];
+
+    setData({
+      ...data,
+      habits: {
+        ...data.habits,
+        [habitId]: { ...habit, completedDates },
+      },
     });
   };
 
-  // Toggle habit completion for a day
-  const toggleDay = (habitId: string, day: number) => {
-    setData((prev) => {
-      const habit = prev[periodKey]?.[habitId];
-      if (!habit) return prev;
-
-      const completedDays = habit.completedDays.includes(day)
-        ? habit.completedDays.filter((d) => d !== day)
-        : [...habit.completedDays, day];
-
-      return {
-        ...prev,
-        [periodKey]: {
-          ...prev[periodKey],
-          [habitId]: { ...habit, completedDays },
-        },
-      };
-    });
-  };
-
-  // Start editing a habit name
+  // Start editing
   const startEditing = (habitId: string) => {
     setEditingHabit(habitId);
     setEditName(habits[habitId].name);
   };
 
-  // Save edited habit name
+  // Save edit
   const saveEdit = () => {
-    if (!editingHabit || !editName.trim()) return;
+    if (!editingHabit || !editName.trim() || !data) return;
 
-    setData((prev) => ({
-      ...prev,
-      [periodKey]: {
-        ...prev[periodKey],
+    setData({
+      ...data,
+      habits: {
+        ...data.habits,
         [editingHabit]: {
-          ...prev[periodKey][editingHabit],
+          ...data.habits[editingHabit],
           name: editName.trim(),
         },
       },
-    }));
+    });
     setEditingHabit(null);
     setEditName("");
   };
 
-  // Navigate periods
-  const navigatePeriod = (direction: number) => {
-    const [year, periodPart] = periodKey.split("-");
-    const currentPeriod = parseInt(periodPart.replace("P", ""));
-    let newPeriod = currentPeriod + direction;
-    let newYear = parseInt(year);
-    
-    // Handle year boundaries (12 periods per year approximately)
-    if (newPeriod < 1) {
-      newYear -= 1;
-      newPeriod = 12;
-    } else if (newPeriod > 12) {
-      newYear += 1;
-      newPeriod = 1;
-    }
-    
-    setPeriodKey(`${newYear}-P${newPeriod}`);
-  };
-
-  // Format period for display
-  const formatPeriodDisplay = (key: string): string => {
-    const info = getPeriodInfo(key);
-    const startStr = info.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const endStr = info.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    return `${startStr} - ${endStr}, ${info.year}`;
-  };
-
-  // Calculate completion percentage
+  // Calculate completion percentage for current view
   const getCompletionPercentage = (habitId: string): number => {
     const habit = habits[habitId];
-    if (!habit) return 0;
-    const relevantDays = isCurrentPeriod ? currentDay : DAYS_IN_PERIOD;
-    return Math.round((habit.completedDays.length / relevantDays) * 100);
+    if (!habit || datesInView.length === 0) return 0;
+    
+    const completedInView = datesInView.filter((date) =>
+      habit.completedDates.includes(formatDate(date))
+    ).length;
+    
+    return Math.round((completedInView / datesInView.length) * 100);
   };
 
-  // Get total period stats
-  const getPeriodStats = () => {
-    const totalHabits = habitIds.length;
-    if (totalHabits === 0) return { avgCompletion: 0, totalChecks: 0, bestStreak: 0 };
+  // Get overall stats
+  const getStats = () => {
+    if (habitIds.length === 0) return { avgCompletion: 0, totalChecks: 0, bestStreak: 0 };
 
-    const relevantDays = isCurrentPeriod ? currentDay : DAYS_IN_PERIOD;
     let totalChecks = 0;
     let bestStreak = 0;
+    let totalPercentage = 0;
 
     habitIds.forEach((id) => {
       const habit = habits[id];
-      totalChecks += habit.completedDays.length;
-      const streak = calculateStreak(habit.completedDays, currentDay);
+      totalChecks += habit.completedDates.length;
+      const streak = calculateStreak(habit.completedDates, today);
       if (streak > bestStreak) bestStreak = streak;
+      totalPercentage += getCompletionPercentage(id);
     });
 
-    const avgCompletion = Math.round(
-      (totalChecks / (totalHabits * relevantDays)) * 100
-    );
-
-    return { avgCompletion, totalChecks, bestStreak };
+    return {
+      avgCompletion: Math.round(totalPercentage / habitIds.length),
+      totalChecks,
+      bestStreak,
+    };
   };
 
-  const stats = getPeriodStats();
-
-  // Get day label for header (just shows "Day X")
-  const getDayLabel = (day: number): string => {
-    return `Day`;
-  };
+  const stats = getStats();
+  const todayStr = formatDate(today);
 
   return (
     <div className="min-h-screen bg-background">
@@ -264,30 +326,34 @@ const HabitTracker = () => {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Habit Tracker</h1>
-                <p className="text-sm text-muted-foreground">Build better habits, one day at a time</p>
+                <p className="text-sm text-muted-foreground">
+                  Day {totalDaysSinceStart} • Started {startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </p>
               </div>
             </div>
-            
-            {/* Period Navigation */}
+
+            {/* Navigation */}
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigatePeriod(-1)}
-                className="text-muted-foreground hover:text-foreground"
+                onClick={() => navigateWindow(1)}
+                disabled={!canGoBack}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-30"
               >
-                ←
+                <ChevronLeft className="w-4 h-4" />
               </Button>
               <span className="text-sm font-medium min-w-[180px] text-center">
-                {formatPeriodDisplay(periodKey)}
+                {formatDateRange()}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigatePeriod(1)}
-                className="text-muted-foreground hover:text-foreground"
+                onClick={() => navigateWindow(-1)}
+                disabled={!canGoForward}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-30"
               >
-                →
+                <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -369,31 +435,33 @@ const HabitTracker = () => {
         )}
 
         {/* Habits Table */}
-        {habitIds.length > 0 ? (
+        {habitIds.length > 0 && datesInView.length > 0 ? (
           <div className="bg-card rounded-xl shadow-card border border-border overflow-hidden animate-fade-in">
-            <div
-              ref={tableContainerRef}
-              className="overflow-x-auto scrollbar-hide"
-            >
+            <div ref={tableContainerRef} className="overflow-x-auto scrollbar-hide">
               <table className="w-full min-w-max">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     <th className="sticky left-0 z-10 bg-muted/50 backdrop-blur-sm px-4 py-3 text-left text-sm font-medium text-muted-foreground min-w-[200px]">
                       Habit
                     </th>
-                    {Array.from({ length: DAYS_IN_PERIOD }, (_, i) => i + 1).map((day) => (
-                      <th
-                        key={day}
-                        className={cn(
-                          "px-2 py-3 text-center text-xs font-medium min-w-[40px]",
-                          isCurrentPeriod && day === currentDay
-                            ? "text-primary"
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        <div>{day}</div>
-                      </th>
-                    ))}
+                    {datesInView.map((date) => {
+                      const dateStr = formatDate(date);
+                      const isToday = dateStr === todayStr;
+                      return (
+                        <th
+                          key={dateStr}
+                          className={cn(
+                            "px-2 py-3 text-center text-xs font-medium min-w-[44px]",
+                            isToday ? "text-primary" : "text-muted-foreground"
+                          )}
+                        >
+                          <div>{date.getDate()}</div>
+                          <div className="text-[10px] opacity-60">
+                            {date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2)}
+                          </div>
+                        </th>
+                      );
+                    })}
                     <th className="sticky right-0 z-10 bg-muted/50 backdrop-blur-sm px-4 py-3 text-center text-sm font-medium text-muted-foreground min-w-[100px]">
                       Progress
                     </th>
@@ -403,7 +471,7 @@ const HabitTracker = () => {
                   {habitIds.map((habitId, index) => {
                     const habit = habits[habitId];
                     const percentage = getCompletionPercentage(habitId);
-                    const streak = calculateStreak(habit.completedDays, currentDay);
+                    const streak = calculateStreak(habit.completedDates, today);
 
                     return (
                       <tr
@@ -413,7 +481,7 @@ const HabitTracker = () => {
                           index % 2 === 0 ? "bg-transparent" : "bg-muted/10"
                         )}
                       >
-                        {/* Habit Name Cell */}
+                        {/* Habit Name */}
                         <td className="sticky left-0 z-10 bg-card backdrop-blur-sm px-4 py-3">
                           {editingHabit === habitId ? (
                             <div className="flex items-center gap-2">
@@ -470,26 +538,25 @@ const HabitTracker = () => {
                         </td>
 
                         {/* Day Checkboxes */}
-                        {Array.from({ length: DAYS_IN_PERIOD }, (_, i) => i + 1).map((day) => {
-                          const isCompleted = habit.completedDays.includes(day);
-                          const isPast = isCurrentPeriod && day < currentDay;
-                          const isFuture = isCurrentPeriod && day > currentDay;
+                        {datesInView.map((date) => {
+                          const dateStr = formatDate(date);
+                          const isCompleted = habit.completedDates.includes(dateStr);
+                          const isToday = dateStr === todayStr;
+                          const isFuture = date > today;
 
                           return (
-                            <td key={day} className="px-2 py-2 text-center">
+                            <td key={dateStr} className="px-2 py-2 text-center">
                               <button
-                                onClick={() => toggleDay(habitId, day)}
+                                onClick={() => toggleDate(habitId, dateStr)}
                                 disabled={isFuture}
                                 className={cn(
                                   "w-7 h-7 rounded-lg border-2 transition-all duration-200 flex items-center justify-center mx-auto",
                                   isCompleted
                                     ? "bg-primary border-primary text-primary-foreground shadow-glow animate-check-bounce"
-                                    : isPast
-                                    ? "border-destructive/30 bg-destructive/5 hover:border-destructive/50"
                                     : isFuture
                                     ? "border-border/30 bg-muted/20 cursor-not-allowed"
                                     : "border-border hover:border-primary/50 hover:bg-primary/5",
-                                  isCurrentPeriod && day === currentDay && !isCompleted && "border-primary/50 ring-2 ring-primary/20"
+                                  isToday && !isCompleted && "border-primary/50 ring-2 ring-primary/20"
                                 )}
                               >
                                 {isCompleted && <Check className="w-4 h-4" />}
@@ -498,13 +565,19 @@ const HabitTracker = () => {
                           );
                         })}
 
-                        {/* Progress Cell */}
+                        {/* Progress */}
                         <td className="sticky right-0 z-10 bg-card backdrop-blur-sm px-4 py-3">
                           <div className="flex flex-col items-center gap-1">
-                            <span className={cn(
-                              "text-sm font-semibold",
-                              percentage >= 80 ? "text-success" : percentage >= 50 ? "text-warning" : "text-muted-foreground"
-                            )}>
+                            <span
+                              className={cn(
+                                "text-sm font-semibold",
+                                percentage >= 80
+                                  ? "text-success"
+                                  : percentage >= 50
+                                  ? "text-warning"
+                                  : "text-muted-foreground"
+                              )}
+                            >
                               {percentage}%
                             </span>
                             <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -512,11 +585,12 @@ const HabitTracker = () => {
                                 className="h-full rounded-full transition-all duration-500"
                                 style={{
                                   width: `${percentage}%`,
-                                  background: percentage >= 80 
-                                    ? "hsl(var(--success))" 
-                                    : percentage >= 50 
-                                    ? "hsl(var(--warning))" 
-                                    : "hsl(var(--muted-foreground))"
+                                  background:
+                                    percentage >= 80
+                                      ? "hsl(var(--success))"
+                                      : percentage >= 50
+                                      ? "hsl(var(--warning))"
+                                      : "hsl(var(--muted-foreground))",
                                 }}
                               />
                             </div>
@@ -529,7 +603,7 @@ const HabitTracker = () => {
               </table>
             </div>
           </div>
-        ) : (
+        ) : habitIds.length === 0 ? (
           <div className="bg-card rounded-xl p-12 shadow-card border border-border text-center animate-fade-in">
             <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
               <Calendar className="w-8 h-8 text-muted-foreground" />
@@ -546,17 +620,18 @@ const HabitTracker = () => {
               Add Your First Habit
             </Button>
           </div>
-        )}
+        ) : null}
 
-        {/* Monthly Summary */}
+        {/* Summary */}
         {habitIds.length > 0 && (
           <div className="mt-8 bg-card rounded-xl p-6 shadow-card border border-border animate-fade-in">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Monthly Summary</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Habit Summary</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {habitIds.map((habitId) => {
                 const habit = habits[habitId];
                 const percentage = getCompletionPercentage(habitId);
-                const streak = calculateStreak(habit.completedDays, currentDay);
+                const streak = calculateStreak(habit.completedDates, today);
+                const totalCompleted = habit.completedDates.length;
 
                 return (
                   <div
@@ -578,23 +653,30 @@ const HabitTracker = () => {
                           className="h-full rounded-full transition-all duration-700"
                           style={{
                             width: `${percentage}%`,
-                            background: percentage >= 80 
-                              ? "hsl(var(--success))" 
-                              : percentage >= 50 
-                              ? "hsl(var(--warning))" 
-                              : "hsl(var(--muted-foreground))"
+                            background:
+                              percentage >= 80
+                                ? "hsl(var(--success))"
+                                : percentage >= 50
+                                ? "hsl(var(--warning))"
+                                : "hsl(var(--muted-foreground))",
                           }}
                         />
                       </div>
-                      <span className={cn(
-                        "text-sm font-semibold min-w-[3rem] text-right",
-                        percentage >= 80 ? "text-success" : percentage >= 50 ? "text-warning" : "text-muted-foreground"
-                      )}>
+                      <span
+                        className={cn(
+                          "text-sm font-semibold min-w-[3rem] text-right",
+                          percentage >= 80
+                            ? "text-success"
+                            : percentage >= 50
+                            ? "text-warning"
+                            : "text-muted-foreground"
+                        )}
+                      >
                         {percentage}%
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      {habit.completedDays.length} of {isCurrentPeriod ? currentDay : DAYS_IN_PERIOD} days completed
+                      {totalCompleted} total check-ins since start
                     </p>
                   </div>
                 );
