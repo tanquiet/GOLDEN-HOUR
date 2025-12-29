@@ -4,9 +4,9 @@
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
-# GOLDEN HOUR
+# GOLDENHOUR
 
-GOLDEN HOUR is a Vite + React + TypeScript starter with shadcn-ui components, Tailwind CSS, and Supabase integration.
+GOLDENHOUR is a Vite + React + TypeScript starter with shadcn-ui components, Tailwind CSS, and Supabase integration.
 
 ## Quick start
 
