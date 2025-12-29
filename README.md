@@ -4,70 +4,92 @@
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
-## How can I edit this code?
+# GOLDEN HOUR
 
-There are several ways of editing your application.
+GOLDEN HOUR is a Vite + React + TypeScript starter with shadcn-ui components, Tailwind CSS, and Supabase integration.
 
-**Use Lovable**
+## Quick start
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Install dependencies:
 
-Changes made via Lovable will be committed automatically to this repo.
+```bash
+npm ci
+```
 
-**Use your preferred IDE**
+Run locally:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Build for production:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+npm run build
+```
 
-**Use GitHub Codespaces**
+Typecheck (CI):
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+npm run typecheck
+```
 
-## What technologies are used for this project?
+Format code:
 
-This project is built with:
+```bash
+npm run format
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Lint:
 
-## How can I deploy this project?
+```bash
+npm run lint
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Preview production build:
 
-## Can I connect a custom domain to my Lovable project?
+```bash
+npm run preview
+```
 
-Yes, you can!
+## Environment
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+This project uses Supabase for auth and storage. Create a `.env` file in the project root with the following variables (example):
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```
+VITE_SUPABASE_URL=https://xyz.supabase.co
+VITE_SUPABASE_ANON_KEY=public-anon-key
+```
+
+Never commit secrets.
+
+## Deployment
+
+Recommended providers: Vercel, Netlify, or any static host that supports SPAs.
+
+Vercel:
+- Create a new project and import the repo.
+- Set build command: `npm run build` and output directory: `dist`.
+- Add environment variables (see Environment above).
+
+Netlify:
+- Create a new site from Git, set build command `npm run build` and publish directory `dist`.
+- Add environment variables in site settings.
+- A sample `netlify.toml` is included.
+
+## Production checklist
+
+- [ ] Ensure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set in production env.
+- [ ] Run `npm run typecheck && npm run build` locally before releasing.
+- [ ] Run accessibility checks (axe, Lighthouse).
+- [ ] Verify responsive UX across devices.
+- [ ] Update `version` in `package.json` for releases and tag Git.
+
+## CI
+
+A GitHub Actions workflow is included at `.github/workflows/ci.yml` that runs lint, typecheck, and build.
+
+## Notes
+
+- To reduce initial bundle size, enable route-based code-splitting with dynamic `import()` for large pages.
+- Customize `vite.config.ts` `build.rollupOptions.manualChunks` for advanced chunking.

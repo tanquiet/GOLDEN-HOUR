@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabase } from "@/integrations/supabase/loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
+import { Calendar, Mail, Lock, ArrowRight, Loader2 } from "@/components/icons";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -22,23 +22,36 @@ const Auth = () => {
 
   // Check if user is already logged in
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+    let mounted = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    (async () => {
+      const supabase = await getSupabase();
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        if (!mounted) return;
         if (session?.user) {
           navigate("/", { replace: true });
         }
         setCheckingAuth(false);
-      }
-    );
+      });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
+      const maybe = data as unknown as { subscription?: { unsubscribe: () => void }; unsubscribe?: () => void };
+      if (maybe.subscription) subscription = maybe.subscription;
+      else if (typeof maybe.unsubscribe === "function") subscription = { unsubscribe: maybe.unsubscribe };
+      else subscription = null;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (sessionData.session?.user) {
         navigate("/", { replace: true });
       }
       setCheckingAuth(false);
-    });
+    })();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      if (subscription) subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const validateInputs = (): boolean => {
@@ -71,6 +84,8 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      const supabase = await getSupabase();
+
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim(),

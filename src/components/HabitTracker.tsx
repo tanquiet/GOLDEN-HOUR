@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Edit2, Check, X, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, Flame, TrendingUp, Calendar, ChevronLeft, ChevronRight, LogOut } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -91,7 +91,7 @@ const SetupScreen = ({ onComplete }: { onComplete: (date: string) => void }) => 
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Calendar className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to Habit Tracker</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Welcome to GOLDEN HOUR</h1>
           <p className="text-muted-foreground">
             Choose your start date to begin tracking your daily habits
           </p>
@@ -323,9 +323,9 @@ const HabitTracker = () => {
   const todayStr = formatDate(today);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" lang="en">
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border">
+      <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border" role="banner">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -333,7 +333,7 @@ const HabitTracker = () => {
                 <Calendar className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Habit Tracker</h1>
+                <h1 className="text-xl font-semibold text-foreground">GOLDEN HOUR</h1>
                 <p className="text-sm text-muted-foreground">
                   Day {totalDaysSinceStart} • Started {startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                 </p>
@@ -379,7 +379,8 @@ const HabitTracker = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" role="main" aria-labelledby="habit-tracker-heading">
+        <h1 id="habit-tracker-heading" className="sr-only">GOLDEN HOUR Dashboard</h1>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="bg-card rounded-xl p-5 shadow-card border border-border animate-fade-in">
